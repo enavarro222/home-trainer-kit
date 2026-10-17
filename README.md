@@ -37,7 +37,7 @@ welcome, with the model and the button.
 TypeScript sources, no build step: Vite and Vitest read them as they are.
 
 ```sh
-pnpm add github:enavarro222/home-trainer-kit#v0.1.0
+pnpm add github:enavarro222/home-trainer-kit#v0.1.1
 ```
 
 ```tsx
