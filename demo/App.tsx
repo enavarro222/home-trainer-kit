@@ -43,8 +43,8 @@ export function App() {
         <h1>Testeur de home trainer</h1>
         <p>
           Vérifie qu&apos;un home trainer connecté, une télécommande Zwift ou une manette marchent
-          avec les jeux (Lignes de niveau, Sonne la Cloche). Chrome ou Edge sur ordinateur, ou
-          Chrome sur Android : il faut le Bluetooth du navigateur.
+          avec les jeux (contour, Sonne la Cloche). Chrome ou Edge sur ordinateur, ou Chrome sur
+          Android : il faut le Bluetooth du navigateur.
         </p>
       </header>
       {!isBluetoothSupported() && (

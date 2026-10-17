@@ -1,8 +1,8 @@
 # home-trainer-kit
 
 Smart trainers, virtual gears and handlebar controls for **browser** home trainer games, over Web
-Bluetooth. Shared by [Sonne la Cloche](https://github.com/enavarro222/sonne_la_cloche) and _Lignes de
-niveau_.
+Bluetooth. Shared by [Sonne la Cloche](https://github.com/enavarro222/sonne_la_cloche) and
+[contour](https://github.com/enavarro222/contour).
 
 **[Test app](https://enavarro222.github.io/home-trainer-kit/)**: check that a smart trainer, a Zwift
 remote or a gamepad works, before riding. Chrome or Edge on a computer, or Chrome on Android (Web
