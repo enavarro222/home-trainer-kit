@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControllerCharacteristic, ZwiftButton } from "./zwiftClick";
-import { KEEPALIVE_MS, RIDE_ON, decodeButtons, newlyPressed, startController } from "./zwiftClick";
+import {
+  ASYNC_UUID,
+  KEEPALIVE_MS,
+  RIDE_ON,
+  SYNC_RX_UUID,
+  SYNC_TX_UUID,
+  decodeButtons,
+  newlyPressed,
+  startController,
+} from "./zwiftClick";
 
 /** A protobuf varint. */
 function varint(n: number): number[] {
@@ -48,17 +57,26 @@ describe("decodeButtons", () => {
 });
 
 /** A fake characteristic: records writes, can push a value. */
-function fake(properties: Partial<ControllerCharacteristic["properties"]>) {
+function fake(uuid: string, properties: Partial<ControllerCharacteristic["properties"]>) {
   const listeners: (() => void)[] = [];
+  const record = (v: BufferSource) => {
+    c.written.push([...new Uint8Array(v as ArrayBuffer)]);
+    return Promise.resolve();
+  };
   const c = {
-    properties: { notify: false, indicate: false, write: false, ...properties },
+    uuid,
+    properties: {
+      notify: false,
+      indicate: false,
+      write: false,
+      writeWithoutResponse: false,
+      ...properties,
+    },
     value: undefined as DataView | undefined,
     written: [] as number[][],
     startNotifications: vi.fn(() => Promise.resolve()),
-    writeValueWithResponse: vi.fn((v: BufferSource) => {
-      c.written.push([...new Uint8Array(v as ArrayBuffer)]);
-      return Promise.resolve();
-    }),
+    writeValueWithResponse: vi.fn(record),
+    writeValueWithoutResponse: vi.fn(record),
     addEventListener: (_: string, l: () => void) => listeners.push(l),
     push(bytes: Uint8Array) {
       c.value = new DataView(bytes.buffer);
@@ -75,9 +93,9 @@ describe("startController", () => {
 
   it("says RideOn, keeps saying it, and reports each press once", async () => {
     vi.useFakeTimers();
-    const notify = fake({ notify: true });
-    const indicate = fake({ indicate: true });
-    const write = fake({ write: true });
+    const notify = fake(ASYNC_UUID, { notify: true });
+    const indicate = fake(SYNC_TX_UUID, { indicate: true });
+    const write = fake(SYNC_RX_UUID, { write: true });
     const presses: ZwiftButton[] = [];
     const stop = await startController([notify, indicate, write], (b) => presses.push(b));
     expect(notify.startNotifications).toHaveBeenCalled();
@@ -97,7 +115,26 @@ describe("startController", () => {
     expect(write.written).toHaveLength(3);
   });
 
+  it("on a Click v2, writes RideOn without response to 0003, not to the other writable ones", async () => {
+    const extra = fake("00000100-19ca-4651-86e5-fa29dcdd09d1", {
+      write: true,
+      writeWithoutResponse: true,
+      notify: true,
+    });
+    const notify = fake(ASYNC_UUID, { notify: true });
+    const write = fake(SYNC_RX_UUID.toUpperCase(), { writeWithoutResponse: true });
+    const indicate = fake(SYNC_TX_UUID, { indicate: true });
+    const stop = await startController([extra, notify, write, indicate], () => undefined);
+    expect(write.writeValueWithoutResponse).toHaveBeenCalled();
+    expect(write.written).toEqual([[...RIDE_ON]]);
+    expect(extra.written).toEqual([]);
+    expect(extra.startNotifications).not.toHaveBeenCalled();
+    stop();
+  });
+
   it("refuses a device without the controller's characteristics", async () => {
-    await expect(startController([fake({ notify: true })], () => undefined)).rejects.toThrow();
+    await expect(
+      startController([fake(ASYNC_UUID, { notify: true })], () => undefined),
+    ).rejects.toThrow();
   });
 });

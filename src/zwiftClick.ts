@@ -20,6 +20,14 @@ export const ZWIFT_SERVICES: readonly BluetoothServiceUUID[] = [
   0xfc82,
 ];
 export const RIDE_ON = new TextEncoder().encode("RideOn");
+/** The controller's own characteristics, the same under both services. */
+const zwiftUuid = (n: number) => `0000000${n}-19ca-4651-86e5-fa29dcdd09d1`;
+/** Buttons, notified. */
+export const ASYNC_UUID = zwiftUuid(2);
+/** RideOn and commands, written (without response on the Click v2). */
+export const SYNC_RX_UUID = zwiftUuid(3);
+/** Answers, indicated. */
+export const SYNC_TX_UUID = zwiftUuid(4);
 export const KEEPALIVE_MS = 3000;
 
 /** Click v2 and Ride: a 32-bit field, a button pressed when its bit is 0. */
@@ -121,25 +129,38 @@ export interface ZwiftController {
 
 /** What the connection needs from a GATT characteristic; lets tests use a fake. */
 export interface ControllerCharacteristic {
-  readonly properties: { notify: boolean; indicate: boolean; write: boolean };
+  readonly uuid: string;
+  readonly properties: {
+    notify: boolean;
+    indicate: boolean;
+    write: boolean;
+    writeWithoutResponse: boolean;
+  };
   readonly value?: DataView;
   startNotifications(): Promise<unknown>;
   writeValueWithResponse(value: BufferSource): Promise<void>;
+  writeValueWithoutResponse(value: BufferSource): Promise<void>;
   addEventListener(type: "characteristicvaluechanged", listener: () => void): void;
 }
 
 /**
- * Handshake on a controller's characteristics (picked by what they do: their
- * UUIDs differ between models), then button presses until `stop` is called.
+ * Handshake on a controller's characteristics (picked by UUID: the Click v2
+ * also has write + notify ones, 0100 to 0102, that refuse RideOn), then
+ * button presses until `stop` is called.
  */
 export async function startController(
   characteristics: readonly ControllerCharacteristic[],
   onPress: (button: ZwiftButton) => void,
 ): Promise<() => void> {
-  const notify = characteristics.find((c) => c.properties.notify);
-  const indicate = characteristics.find((c) => c.properties.indicate);
-  const write = characteristics.find((c) => c.properties.write);
+  const byUuid = (uuid: string) => characteristics.find((c) => c.uuid.toLowerCase() === uuid);
+  const notify = byUuid(ASYNC_UUID);
+  const indicate = byUuid(SYNC_TX_UUID);
+  const write = byUuid(SYNC_RX_UUID);
   if (!notify || !write) throw new Error("not a Zwift controller");
+  const rideOn = () =>
+    write.properties.write
+      ? write.writeValueWithResponse(RIDE_ON)
+      : write.writeValueWithoutResponse(RIDE_ON);
   let held = new Set<ZwiftButton>();
   notify.addEventListener("characteristicvaluechanged", () => {
     const v = notify.value;
@@ -150,10 +171,10 @@ export async function startController(
     held = now;
   });
   await notify.startNotifications();
-  if (indicate && indicate !== notify) await indicate.startNotifications();
-  await write.writeValueWithResponse(RIDE_ON);
+  if (indicate) await indicate.startNotifications();
+  await rideOn();
   const keepalive = setInterval(() => {
-    write.writeValueWithResponse(RIDE_ON).catch(() => undefined);
+    rideOn().catch(() => undefined);
   }, KEEPALIVE_MS);
   return () => {
     clearInterval(keepalive);
