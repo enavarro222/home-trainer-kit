@@ -13,7 +13,11 @@ export type ControlAction =
   | "gearUp"
   | "gearDown"
   | "powerUp"
-  | "powerDown";
+  | "powerDown"
+  /** Buttons with no meaning of their own (Zwift B, Y, Z): the game chooses. */
+  | "b"
+  | "y"
+  | "z";
 
 type Listener = (action: ControlAction) => void;
 const listeners = new Set<Listener>();

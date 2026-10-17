@@ -16,7 +16,8 @@ de build : Vite et Vitest des jeux les lisent directement.
   (0,75 à 5,49), départ sur le rapport le plus proche du réel. Avec une cassette, le jeu n'appelle pas
   `setGear` : rien ne change. Home trainers sans simulation : approximation par niveau de résistance.
 - **Commandes au guidon** (`controls.ts`) : les sources émettent des actions (`left`, `right`,
-  `select`, `gearUp`, `gearDown`, `powerUp`, `powerDown`), les écrans les écoutent avec `useControls`.
+  `select`, `gearUp`, `gearDown`, `powerUp`, `powerDown`, et `b`, `y`, `z` : boutons Zwift sans sens
+  imposé, au jeu de choisir), les écrans les écoutent avec `useControls`.
   Sources : manette (`gamepad.ts`, `useGamepadControls`, à monter une fois) et télécommandes Zwift
   (`zwiftClick.ts`, `useZwiftController`). Le clavier reste propre à chaque jeu.
 - **Zwift Click / Click v2 / Ride** : protocole non officiel, rétro-ingénierie (makinolo.com,

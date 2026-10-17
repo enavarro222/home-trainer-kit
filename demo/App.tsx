@@ -24,6 +24,9 @@ const ACTION_LABELS: Record<ControlAction, string> = {
   gearDown: "vitesse −",
   powerUp: "haut",
   powerDown: "bas",
+  b: "B",
+  y: "Y",
+  z: "Z",
 };
 
 const SLOPE_CONTROL: Record<"simulation" | "resistance", string> = {
@@ -367,6 +370,9 @@ function ActionLog() {
     gearDown: add("gearDown"),
     powerUp: add("powerUp"),
     powerDown: add("powerDown"),
+    b: add("b"),
+    y: add("y"),
+    z: add("z"),
   });
   return (
     <section className="card" aria-labelledby="log-title">

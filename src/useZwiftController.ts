@@ -8,7 +8,7 @@ import {
   requestZwiftController,
 } from "./zwiftClick";
 
-/** What each button does: + and − shift, the arrows choose, A confirms. */
+/** What each button does: + and − shift, the arrows choose, A confirms; B, Y, Z are the game's. */
 export const ZWIFT_ACTIONS: Readonly<Partial<Record<ZwiftButton, ControlAction>>> = {
   plus: "gearUp",
   minus: "gearDown",
@@ -17,6 +17,9 @@ export const ZWIFT_ACTIONS: Readonly<Partial<Record<ZwiftButton, ControlAction>>
   a: "select",
   up: "powerUp",
   down: "powerDown",
+  b: "b",
+  y: "y",
+  z: "z",
 };
 
 export interface ZwiftControllerState {

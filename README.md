@@ -18,7 +18,8 @@ Bluetooth: no iOS).
   FTMS road model, grade × k, Crr × k and wind coefficient × k³. 24 gears from 0.75 to 5.49, starting
   on the one closest to the real ratio. With a real cassette, don't call `setGear`: nothing changes.
 - **Handlebar controls**: sources emit actions (`left`, `right`, `select`, `gearUp`, `gearDown`,
-  `powerUp`, `powerDown`) that screens listen to with `useControls`. Sources: gamepads (standard
+  `powerUp`, `powerDown`, and `b`, `y`, `z`: Zwift buttons that mean what the game decides) that
+  screens listen to with `useControls`. Sources: gamepads (standard
   mapping) and Zwift remotes (Click, Click v2, Ride).
 
 ### Zwift remotes: caveats
