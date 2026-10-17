@@ -1,0 +1,39 @@
+// Smart trainers (Bluetooth FTMS, Cycling Power, CSC)
+export type { Sensor, SensorReading } from "./types";
+export { ZERO_READING } from "./types";
+export type {
+  BluetoothConnection,
+  BluetoothErrorCode,
+  BluetoothSensor,
+  Protocol,
+} from "./ble/bluetoothSensor";
+export {
+  BluetoothError,
+  connectTrainer,
+  isBluetoothSupported,
+  requestTrainer,
+} from "./ble/bluetoothSensor";
+export type { Connection, ConnectionError, SensorState } from "./useSensor";
+export { useSensor } from "./useSensor";
+
+// Virtual gears
+export type { Drivetrain, Road } from "./gears";
+export {
+  DEFAULT_DRIVETRAIN,
+  DEFAULT_ROAD,
+  VIRTUAL_RATIOS,
+  gearFactor,
+  gearedSimulation,
+  neutralGear,
+  realRatio,
+  shift,
+} from "./gears";
+
+// Handlebar controls: gamepad, Zwift Click / Ride
+export type { ControlAction } from "./controls";
+export { emitControl, useControls } from "./controls";
+export { pressed, useGamepadControls } from "./gamepad";
+export type { ZwiftButton } from "./zwiftClick";
+export { decodeButtons, isZwiftControllerSupported } from "./zwiftClick";
+export type { ZwiftControllerState } from "./useZwiftController";
+export { ZWIFT_ACTIONS, useZwiftController } from "./useZwiftController";
