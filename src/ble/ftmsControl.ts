@@ -114,12 +114,15 @@ export class FtmsControl {
   private pending: ((result: number) => void) | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private slope = 0;
+  /** How the slope reaches the trainer. */
+  readonly kind: SlopeMode["kind"];
   private gear = 1;
 
   constructor(
     private readonly controlPoint: ControlPoint,
     private readonly mode: SlopeMode,
   ) {
+    this.kind = mode.kind;
     controlPoint.addEventListener("characteristicvaluechanged", () => {
       const response = controlPoint.value && parseControlResponse(controlPoint.value);
       if (response) this.pending?.(response.result);

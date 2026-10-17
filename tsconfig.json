@@ -5,7 +5,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["web-bluetooth", "node"],
+    "types": ["web-bluetooth", "node", "vite/client"],
     "jsx": "react-jsx",
     "noEmit": true,
     "verbatimModuleSyntax": true,
@@ -18,5 +18,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": ["src", "demo", "vitest.config.ts", "vite.config.ts"]
 }

@@ -26,12 +26,22 @@ de build : Vite et Vitest des jeux les lisent directement.
   Bluetooth). Click v2 : Zwift le verrouille sur son appli, ce qui répond sans « déverrouillage » reste à
   vérifier.
 
+## Application de test
+
+`demo/` (`pnpm dev`, `pnpm build` → `dist/`) : connecter un home trainer (protocole, mode de pilotage,
+puissance, cadence, pente à envoyer, vitesses virtuelles), une télécommande Zwift, voir les actions de
+la manette. Publiée sur GitHub Pages par `.github/workflows/pages.yml`
+(https://enavarro222.github.io/home-trainer-kit/). Interface en français, comme les jeux.
+
 ## Utilisation dans un jeu
 
 - En développement : `"home-trainer-kit": "link:../home-trainer-kit"`.
-- Plus tard (CI de Sonne la Cloche) : dépendance git taguée `github:enavarro222/home-trainer-kit#vX.Y.Z`.
+- Pour la CI d'un jeu : dépendance git taguée `github:enavarro222/home-trainer-kit#vX.Y.Z`. Publier une
+  version : tag `vX.Y.Z` poussé (dépôt public github.com/enavarro222/home-trainer-kit, clé SSH perso
+  via `core.sshCommand`).
 
 ## Code
 
-Code et commentaires en anglais. Commandes : `pnpm test`, `pnpm check` (format, lint, types, tests).
+Code et commentaires en anglais, README en anglais. Commandes : `pnpm test`, `pnpm check` (format,
+lint, types, tests), CI GitHub Actions (`ci.yml`). pnpm épinglé (`packageManager`) comme Sonne la Cloche.
 Commits avec l'identité perso (enavarro222 <enavarro222@gmail.com>).

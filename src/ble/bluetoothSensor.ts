@@ -70,6 +70,8 @@ export interface BluetoothConnection {
   protocol: Protocol;
   /** The game can set the trainer's slope. */
   controllable: boolean;
+  /** How: a simulated grade (FTMS 0x11), a resistance level (0x04), or not at all. */
+  slopeControl: "simulation" | "resistance" | null;
 }
 
 const FTMS_FEATURE = 0x2acc;
@@ -185,6 +187,7 @@ export async function connectTrainer(
       deviceName: device.name ?? "",
       protocol: profile.protocol,
       controllable: control !== null,
+      slopeControl: control?.kind ?? null,
     };
   }
 

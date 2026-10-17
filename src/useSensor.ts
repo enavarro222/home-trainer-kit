@@ -20,6 +20,7 @@ export type Connection =
       protocol: Protocol;
       /** The game sets the trainer's slope. */
       controllable: boolean;
+      slopeControl: "simulation" | "resistance" | null;
       lost: boolean;
     };
 
@@ -89,6 +90,7 @@ export function useSensor(
           deviceName: result.deviceName,
           protocol: result.protocol,
           controllable: result.controllable,
+          slopeControl: result.slopeControl,
           lost: false,
         });
       } catch (e) {

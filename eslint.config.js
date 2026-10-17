@@ -6,7 +6,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 export default defineConfig(
-  globalIgnores(["coverage"]),
+  globalIgnores(["coverage", "dist"]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
@@ -20,6 +20,9 @@ export default defineConfig(
     },
   },
   { files: ["**/*.js"], extends: [tseslint.configs.disableTypeChecked] },
-  { files: ["src/**/*.{ts,tsx}"], extends: [reactHooks.configs.flat["recommended-latest"]] },
+  {
+    files: ["src/**/*.{ts,tsx}", "demo/**/*.{ts,tsx}"],
+    extends: [reactHooks.configs.flat["recommended-latest"]],
+  },
   prettier,
 );
