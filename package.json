@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Smart trainer (Bluetooth FTMS), virtual gears, Zwift Click and gamepad for browser home trainer games.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./gears": "./src/gears.ts"
   },
   "scripts": {
     "lint": "eslint .",
