@@ -1,4 +1,3 @@
-// Copied from sonne_la_cloche@11a768a, without the demo-mode test.
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSensor } from "./useSensor";
@@ -73,6 +72,19 @@ describe("useSensor", () => {
     expect(trainer.requestDevice).toHaveBeenCalledTimes(1);
     expect(trainer.gatt.connect).toHaveBeenCalledTimes(2);
     expect(result.current.ready).toBe(true);
+  });
+
+  it("leaves demo mode before opening the picker", async () => {
+    const trainer = fakeTrainer();
+    const { result } = renderHook(() => useSensor());
+    act(() => {
+      result.current.startDemo();
+    });
+    trainer.requestDevice.mockRejectedValueOnce(new DOMException("cancelled", "NotFoundError"));
+    await act(() => result.current.connect());
+    expect(result.current.error?.code).toBe("cancelled");
+    expect(result.current.connection.kind).toBe("none");
+    expect(result.current.ready).toBe(false);
   });
 
   it("keeps a connected trainer when picking another one is cancelled", async () => {

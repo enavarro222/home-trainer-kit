@@ -13,6 +13,8 @@ export {
   isBluetoothSupported,
   requestTrainer,
 } from "./ble/bluetoothSensor";
+export type { Foot } from "./demo/demoSensor";
+export { DemoSensor, MAX_DEMO_CADENCE, STOP_AFTER_MS, cadenceFor } from "./demo/demoSensor";
 export type { Connection, ConnectionError, SensorState } from "./useSensor";
 export { useSensor } from "./useSensor";
 

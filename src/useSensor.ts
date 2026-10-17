@@ -7,11 +7,13 @@ import {
   type Protocol,
   requestTrainer,
 } from "./ble/bluetoothSensor";
+import { DemoSensor } from "./demo/demoSensor";
 import type { Road } from "./gears";
 import type { Sensor } from "./types";
 
 export type Connection =
   | { kind: "none" }
+  | { kind: "demo" }
   | {
       kind: "bluetooth";
       deviceName: string;
@@ -31,12 +33,13 @@ export interface SensorState {
   connection: Connection;
   connecting: boolean;
   error: ConnectionError | null;
-  /** A sensor that can score points right now. */
+  /** A sensor that can be ridden right now. */
   ready: boolean;
   /** Picks a trainer in the browser list (needs a user gesture). */
   connect: () => Promise<void>;
   /** Reconnects the last picked trainer, without the picker. */
   reconnect: () => Promise<void>;
+  startDemo: () => void;
 }
 
 const isBluetooth = (sensor: Sensor | null): sensor is BluetoothSensor =>
@@ -100,6 +103,15 @@ export function useSensor(
   );
 
   const connect = useCallback(() => {
+    // Leave the demo first: cancelling the picker then means "no bike" rather
+    // than a demo still running unnoticed. Stays synchronous so the picker
+    // still opens from the user's gesture.
+    if (current.current?.kind === "demo") {
+      current.current.disconnect();
+      current.current = null;
+      setSensor(null);
+      setConnection({ kind: "none" });
+    }
     return attach(requestTrainer);
   }, [attach]);
 
@@ -108,6 +120,10 @@ export function useSensor(
     return attach(isBluetooth(previous) ? () => Promise.resolve(previous.device) : requestTrainer);
   }, [attach]);
 
+  const startDemo = useCallback(() => {
+    replace(new DemoSensor(), { kind: "demo" });
+  }, [replace]);
+
   useEffect(
     () => () => {
       current.current?.disconnect();
@@ -115,7 +131,9 @@ export function useSensor(
     [],
   );
 
-  const ready = sensor !== null && connection.kind === "bluetooth" && !connection.lost;
+  const ready =
+    sensor !== null &&
+    (connection.kind === "demo" || (connection.kind === "bluetooth" && !connection.lost));
 
   return {
     sensor,
@@ -125,5 +143,6 @@ export function useSensor(
     ready,
     connect,
     reconnect,
+    startDemo,
   };
 }

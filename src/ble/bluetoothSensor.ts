@@ -17,10 +17,30 @@ const PROFILES: readonly {
   service: number;
   characteristic: number;
   parse: (view: DataView) => ParsedData;
+  /** Whether the protocol carries power. */
+  power: boolean;
 }[] = [
-  { protocol: "FTMS", service: 0x1826, characteristic: 0x2ad2, parse: parseIndoorBikeData },
-  { protocol: "Cycling Power", service: 0x1818, characteristic: 0x2a63, parse: parseCyclingPower },
-  { protocol: "CSC", service: 0x1816, characteristic: 0x2a5b, parse: parseCscMeasurement },
+  {
+    protocol: "FTMS",
+    service: 0x1826,
+    characteristic: 0x2ad2,
+    parse: parseIndoorBikeData,
+    power: true,
+  },
+  {
+    protocol: "Cycling Power",
+    service: 0x1818,
+    characteristic: 0x2a63,
+    parse: parseCyclingPower,
+    power: true,
+  },
+  {
+    protocol: "CSC",
+    service: 0x1816,
+    characteristic: 0x2a5b,
+    parse: parseCscMeasurement,
+    power: false,
+  },
 ];
 
 export type BluetoothErrorCode = "unsupported" | "cancelled" | "noData" | "failed";
@@ -124,7 +144,7 @@ export async function connectTrainer(
       continue; // service missing on this device: try the next one
     }
 
-    const tracker = new ReadingTracker();
+    const tracker = new ReadingTracker(profile.power);
     const onValue = () => {
       if (characteristic.value) {
         tracker.update(profile.parse(characteristic.value), performance.now());

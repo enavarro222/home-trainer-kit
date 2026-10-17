@@ -8,7 +8,8 @@ de build : Vite et Vitest des jeux les lisent directement.
 
 - **Home trainer** (`src/ble/`, `types.ts`, `useSensor.ts`) : Web Bluetooth, FTMS (puissance, cadence,
   pente simulée `0x11` ou niveau de résistance `0x04`), Cycling Power, CSC. Repris de Sonne la Cloche
-  (`src/sensors` @11a768a). Le modèle de route (Crr, Cw) est un paramètre de `connectTrainer` /
+  (`src/sensors`, à jour de c728146), avec le capteur de démo (pédaler avec ← → en alternance,
+  `demo/`). Le modèle de route (Crr, Cw) est un paramètre de `connectTrainer` /
   `useSensor` (`DEFAULT_ROAD` sinon).
 - **Vitesses virtuelles** (`gears.ts`), pour un seul pignon (Zwift Cog) : un braquet k fois plus grand
   que le réel demande au home trainer k·F(k·v), soit pente × k, Crr × k, Cw × k³. Table de 24 rapports

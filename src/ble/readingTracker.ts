@@ -3,7 +3,7 @@ import { type CrankSample, crankCadence, type ParsedData } from "./parsers";
 
 /**
  * Without a notification for this long, the bike is considered stopped (or
- * gone): the last value must not keep scoring points.
+ * gone): the last value must not keep counting.
  */
 export const STALE_AFTER_MS = 3000;
 
@@ -15,6 +15,13 @@ export const CRANK_STOPPED_AFTER_MS = 2000;
 
 /** Latest reading built from successive Bluetooth notifications. */
 export class ReadingTracker {
+  /**
+   * `expectsPower`: the protocol carries power (FTMS, Cycling Power). Then
+   * power is taken as measured from the start, before any notification: a
+   * game started right after connecting must not fall back to leg speed.
+   */
+  constructor(private readonly expectsPower = false) {}
+
   private reading: SensorReading = ZERO_READING;
   private lastCrank: CrankSample | null = null;
   private lastUpdateMs = Number.NEGATIVE_INFINITY;
@@ -41,11 +48,12 @@ export class ReadingTracker {
   }
 
   /**
-   * Power is measured if the sensor sends it, unless pedaling never moved it
-   * from 0: some trainers send the field without measuring anything.
+   * Power is measured if the sensor sends it (or its protocol carries it),
+   * unless pedaling never moved it from 0: some trainers send the field
+   * without measuring anything.
    */
   measuresPower(): boolean {
-    return this.powerSent && (this.powerSeen || !this.pedaledWithoutPower);
+    return (this.expectsPower || this.powerSent) && (this.powerSeen || !this.pedaledWithoutPower);
   }
 
   read(nowMs: number): SensorReading {
