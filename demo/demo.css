@@ -92,7 +92,7 @@ button {
   cursor: pointer;
 }
 
-button:first-child:not([aria-label]) {
+button:first-child:not([aria-label], .plain) {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -214,4 +214,12 @@ input[type="number"] {
 
 .log span {
   color: var(--ink-soft);
+}
+
+/* The Click v2 diagnostic: raw lines, kept as typed, scrolling on their own. */
+.rawlog {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre;
+  font-size: 0.8rem;
 }

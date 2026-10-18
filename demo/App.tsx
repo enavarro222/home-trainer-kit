@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ClickDiagnostic } from "./ClickDiagnostic";
 import type { ControlAction, SensorReading, SensorState, ZwiftControllerState } from "../src";
 import {
   DEFAULT_DRIVETRAIN,
@@ -59,6 +60,7 @@ export function App() {
       <TrainerCard trainer={trainer} />
       <RemoteCard remote={remote} />
       <ActionLog />
+      <ClickDiagnostic />
     </main>
   );
 }
@@ -318,21 +320,33 @@ function RemoteCard({ remote }: { remote: ZwiftControllerState }) {
   return (
     <section className="card" aria-labelledby="remote-title">
       <h2 id="remote-title">Télécommande Zwift (Click, Click v2, Ride)</h2>
-      <p>
-        {remote.name
-          ? `${remote.name} · ${remote.lost ? "connexion perdue" : "connectée"}`
-          : "Ferme d'abord Zwift, Zwift Companion ou BikeControl : une télécommande n'accepte qu'une connexion."}
-      </p>
+      {remote.controllers.length === 0 ? (
+        <p>
+          Ferme d'abord Zwift, Zwift Companion ou BikeControl : une télécommande n'accepte qu'une
+          connexion. Click v2 et Play : deux boîtiers, à connecter l'un après l'autre.
+        </p>
+      ) : (
+        <ul>
+          {remote.controllers.map((c) => (
+            <li key={c.id}>
+              {c.name} · {c.lost ? "connexion perdue" : "connectée"}
+              {c.lastButton && ` · dernier bouton : ${c.lastButton} (${c.presses})`}
+            </li>
+          ))}
+        </ul>
+      )}
       <button
         type="button"
         disabled={remote.connecting || !remote.supported}
-        onClick={() => void remote.connect()}
+        onClick={() => void (remote.lost ? remote.reconnect() : remote.connect())}
       >
         {remote.connecting
           ? "Connexion…"
-          : remote.name
+          : remote.lost
             ? "Reconnecter"
-            : "Connecter une télécommande Zwift"}
+            : remote.name
+              ? "Ajouter une télécommande (l'autre côté)"
+              : "Connecter une télécommande Zwift"}
       </button>
       {remote.error && (
         <p className="warning" role="alert">

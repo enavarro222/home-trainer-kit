@@ -28,9 +28,10 @@ Zwift doesn't publish the protocol: this follows reverse engineering
 ([makinolo](https://www.makinolo.com/blog/2024/07/26/zwift-ride-protocol/),
 [zwiftboard](https://github.com/thomaschampagne/zwiftboard),
 [zwiftplay](https://github.com/ajchellew/zwiftplay)), and a firmware update may break it. A remote
-takes one connection at a time: close Zwift, Zwift Companion or BikeControl first. The Click v2 is
-locked to Zwift's app; which buttons answer without its unlock is still to be checked. Reports
-welcome, with the model and the button.
+takes one connection at a time: close Zwift, Zwift Companion or BikeControl first. The Click v2
+(two pods) has its own notes, measured on a real one: [docs/zwift-click-v2.md](docs/zwift-click-v2.md)
+(the right pod works alone, it sleeps after 60 s without a press). Reports welcome, with the model
+and the button.
 
 ## Use in a game
 
@@ -44,7 +45,7 @@ pnpm add github:enavarro222/home-trainer-kit#v0.1.1
 import { useControls, useGamepadControls, useSensor, useZwiftController } from "home-trainer-kit";
 
 const trainer = useSensor({ rolling: 0.004, airDrag: 0.19 }); // the game's road model
-const remote = useZwiftController(); // remote.connect() from a click
+const remote = useZwiftController(); // remote.connect() from a click; remote.reconnect() once lost
 useGamepadControls(); // once, app-wide
 useControls({ left: turnLeft, right: turnRight, select: togglePause });
 ```
