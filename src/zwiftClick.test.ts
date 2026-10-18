@@ -78,6 +78,9 @@ function fake(uuid: string, properties: Partial<ControllerCharacteristic["proper
     writeValueWithResponse: vi.fn(record),
     writeValueWithoutResponse: vi.fn(record),
     addEventListener: (_: string, l: () => void) => listeners.push(l),
+    removeEventListener: (_: string, l: () => void) => {
+      listeners.splice(listeners.indexOf(l), 1);
+    },
     push(bytes: Uint8Array) {
       c.value = new DataView(bytes.buffer);
       for (const l of listeners) l();
@@ -130,6 +133,18 @@ describe("startController", () => {
     expect(extra.written).toEqual([]);
     expect(extra.startNotifications).not.toHaveBeenCalled();
     stop();
+  });
+
+  it("stops listening once stopped: a new start on the same characteristic reports once", async () => {
+    const notify = fake(ASYNC_UUID, { notify: true });
+    const write = fake(SYNC_RX_UUID, { write: true });
+    const presses: ZwiftButton[] = [];
+    const stop = await startController([notify, write], (b) => presses.push(b));
+    stop();
+    const again = await startController([notify, write], (b) => presses.push(b));
+    notify.push(keypad(0x1000));
+    expect(presses).toEqual(["plus"]);
+    again();
   });
 
   it("refuses a device without the controller's characteristics", async () => {

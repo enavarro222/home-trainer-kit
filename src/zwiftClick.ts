@@ -14,6 +14,21 @@ export type ZwiftButton =
 
 /** Zwift's Bluetooth company identifier, in advertisements. */
 export const ZWIFT_MANUFACTURER = 0x094a;
+/**
+ * The first byte of a controller's manufacturer data: which model and side.
+ * From BikeControl (lib/bluetooth/devices/zwift/constants.dart); the Click
+ * v2 values are marked unconfirmed there.
+ */
+export const ZWIFT_DEVICE_TYPES = {
+  playRight: 0x02,
+  playLeft: 0x03,
+  rideRight: 0x07,
+  rideLeft: 0x08,
+  click: 0x09,
+  clickV2Right: 0x0a,
+  clickV2Left: 0x0b,
+} as const;
+
 /** The controllers' service; Ride controllers updated since January 2025 use FC82. */
 export const ZWIFT_SERVICES: readonly BluetoothServiceUUID[] = [
   "00000001-19ca-4651-86e5-fa29dcdd09d1",
@@ -111,15 +126,37 @@ export const newlyPressed = (
 export const isZwiftControllerSupported = (): boolean =>
   typeof navigator !== "undefined" && "bluetooth" in navigator;
 
-/** Opens the browser device picker on Zwift controllers. Must run from a user gesture. */
-export function requestZwiftController(): Promise<BluetoothDevice> {
+/**
+ * Opens the browser device picker on Zwift controllers. Must run from a user
+ * gesture. With `deviceType` (see ZWIFT_DEVICE_TYPES), only that model and
+ * side are listed: the picker shows names only, the same for both sides.
+ */
+export function requestZwiftController(deviceType?: number): Promise<BluetoothDevice> {
   return navigator.bluetooth.requestDevice({
-    filters: [
-      { manufacturerData: [{ companyIdentifier: ZWIFT_MANUFACTURER }] },
-      { namePrefix: "Zwift" },
-    ],
+    filters:
+      deviceType === undefined
+        ? [
+            { manufacturerData: [{ companyIdentifier: ZWIFT_MANUFACTURER }] },
+            { namePrefix: "Zwift" },
+          ]
+        : [
+            {
+              manufacturerData: [
+                { companyIdentifier: ZWIFT_MANUFACTURER, dataPrefix: new Uint8Array([deviceType]) },
+              ],
+            },
+          ],
     optionalServices: [...ZWIFT_SERVICES],
   });
+}
+
+/** Every message from a controller, raw: for diagnosing a model. */
+export type OnZwiftMessage = (channel: "buttons" | "answers", bytes: Uint8Array) => void;
+
+export interface ControllerOptions {
+  onMessage?: OnZwiftMessage;
+  /** Written at start and every KEEPALIVE_MS; RIDE_ON by default. */
+  hello?: Uint8Array<ArrayBuffer>;
 }
 
 export interface ZwiftController {
@@ -141,6 +178,7 @@ export interface ControllerCharacteristic {
   writeValueWithResponse(value: BufferSource): Promise<void>;
   writeValueWithoutResponse(value: BufferSource): Promise<void>;
   addEventListener(type: "characteristicvaluechanged", listener: () => void): void;
+  removeEventListener(type: "characteristicvaluechanged", listener: () => void): void;
 }
 
 /**
@@ -151,6 +189,7 @@ export interface ControllerCharacteristic {
 export async function startController(
   characteristics: readonly ControllerCharacteristic[],
   onPress: (button: ZwiftButton) => void,
+  { onMessage, hello = RIDE_ON }: ControllerOptions = {},
 ): Promise<() => void> {
   const byUuid = (uuid: string) => characteristics.find((c) => c.uuid.toLowerCase() === uuid);
   const notify = byUuid(ASYNC_UUID);
@@ -159,17 +198,27 @@ export async function startController(
   if (!notify || !write) throw new Error("not a Zwift controller");
   const rideOn = () =>
     write.properties.write
-      ? write.writeValueWithResponse(RIDE_ON)
-      : write.writeValueWithoutResponse(RIDE_ON);
+      ? write.writeValueWithResponse(hello)
+      : write.writeValueWithoutResponse(hello);
   let held = new Set<ZwiftButton>();
-  notify.addEventListener("characteristicvaluechanged", () => {
+  const bytesOf = (v: DataView) =>
+    new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength));
+  const onAnswer = () => {
+    if (indicate?.value) onMessage?.("answers", bytesOf(indicate.value));
+  };
+  const onValue = () => {
     const v = notify.value;
     if (!v) return;
+    onMessage?.("buttons", bytesOf(v));
     const now = decodeButtons(new Uint8Array(v.buffer, v.byteOffset, v.byteLength));
     if (!now) return;
     for (const b of newlyPressed(held, now)) onPress(b);
     held = now;
-  });
+  };
+  // Chrome hands back the same characteristic on a new connection to the
+  // same device: a listener left behind would report every press twice.
+  notify.addEventListener("characteristicvaluechanged", onValue);
+  if (onMessage) indicate?.addEventListener("characteristicvaluechanged", onAnswer);
   await notify.startNotifications();
   if (indicate) await indicate.startNotifications();
   await rideOn();
@@ -178,6 +227,8 @@ export async function startController(
   }, KEEPALIVE_MS);
   return () => {
     clearInterval(keepalive);
+    notify.removeEventListener("characteristicvaluechanged", onValue);
+    indicate?.removeEventListener("characteristicvaluechanged", onAnswer);
   };
 }
 
@@ -186,6 +237,7 @@ export async function connectZwiftController(
   device: BluetoothDevice,
   onPress: (button: ZwiftButton) => void,
   onLost: () => void,
+  options: ControllerOptions = {},
 ): Promise<ZwiftController> {
   const gatt = device.gatt;
   if (!gatt) throw new Error("no GATT server");
@@ -199,7 +251,7 @@ export async function connectZwiftController(
     gatt.disconnect();
     throw new Error("not a Zwift controller");
   }
-  const stop = await startController(await service.getCharacteristics(), onPress);
+  const stop = await startController(await service.getCharacteristics(), onPress, options);
   const lost = () => {
     stop();
     onLost();

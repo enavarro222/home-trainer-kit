@@ -22,64 +22,190 @@ export const ZWIFT_ACTIONS: Readonly<Partial<Record<ZwiftButton, ControlAction>>
   z: "z",
 };
 
+/**
+ * After a lost link, the controller is tried again on its own after each of
+ * these delays (ms), then left to `reconnect`. Covers a controller that went
+ * out of range or to sleep for a moment.
+ */
+export const RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 10000];
+
+/**
+ * The same button from another controller this soon after (ms) is the same
+ * press: one side of a pair may relay the other's buttons.
+ */
+export const RELAY_MS = 250;
+
+/** One connected controller: a Click v2 or a Zwift Play is two of them, left and right. */
+export interface ZwiftControllerInfo {
+  /** The browser's id for the device. */
+  id: string;
+  name: string;
+  /** The link dropped and the automatic retries gave up, or are still trying. */
+  lost: boolean;
+  /** Its last button pressed, to check it works; null before any. */
+  lastButton: ZwiftButton | null;
+  /** Presses so far: changes on each press, even of the same button. */
+  presses: number;
+}
+
 export interface ZwiftControllerState {
   supported: boolean;
   connecting: boolean;
-  /** The connected controller's name, or null. */
+  /** Every controller picked, in the order picked. */
+  controllers: readonly ZwiftControllerInfo[];
+  /** The first controller's name, or null when none. */
   name: string | null;
-  /** The link dropped; reconnect from a gesture. */
+  /** Some controller's link dropped. */
   lost: boolean;
   error: string | null;
-  /** Picks a controller in the browser list (needs a user gesture). */
+  /**
+   * Picks a controller in the browser list (needs a user gesture) and adds
+   * it to the others: both sides of a Click v2 are picked one after the other.
+   */
   connect: () => Promise<void>;
+  /** Every lost controller, again, without the browser list; with none picked, `connect`. */
+  reconnect: () => Promise<void>;
+  /** Disconnects them all. */
   disconnect: () => void;
 }
 
-/** A Zwift Click / Ride, its presses emitted as handlebar actions (see controls). */
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+interface Link {
+  device: BluetoothDevice;
+  controller: ZwiftController | null;
+  retry: ReturnType<typeof setTimeout> | null;
+}
+
+/** Zwift Click / Ride / Play controllers, their presses emitted as handlebar actions (see controls). */
 export function useZwiftController(): ZwiftControllerState {
   const [connecting, setConnecting] = useState(false);
-  const [name, setName] = useState<string | null>(null);
-  const [lost, setLost] = useState(false);
+  const [controllers, setControllers] = useState<readonly ZwiftControllerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const current = useRef<ZwiftController | null>(null);
+  const links = useRef(new Map<string, Link>());
+  /** Each button's last press emitted: which controller, and when. */
+  const emitted = useRef(new Map<ZwiftButton, { id: string; at: number }>());
 
-  const connect = useCallback(async () => {
+  const update = useCallback((id: string, change: Partial<ZwiftControllerInfo>) => {
+    setControllers((all) => all.map((c) => (c.id === id ? { ...c, ...change } : c)));
+  }, []);
+
+  const stopRetrying = (link: Link) => {
+    if (link.retry !== null) clearTimeout(link.retry);
+    link.retry = null;
+  };
+
+  /** Connects to `device`; on a lost link, retries it after each delay of `RETRY_DELAYS_MS`. */
+  const attach = useCallback(
+    async (device: BluetoothDevice) => {
+      const id = device.id;
+      const known = links.current.get(id);
+      // Picked again while connected: it already works, a new link would
+      // only cut this one.
+      if (known?.controller) return;
+      const link: Link = known ?? { device, controller: null, retry: null };
+      stopRetrying(link);
+      links.current.set(id, link);
+      const current = () => links.current.get(id) === link;
+
+      const retryFrom = (attempt: number) => {
+        const delay = RETRY_DELAYS_MS[attempt];
+        if (delay === undefined || !current()) return;
+        link.retry = setTimeout(() => {
+          link.retry = null;
+          if (!current()) return;
+          open().then(
+            () => undefined,
+            () => {
+              retryFrom(attempt + 1);
+            },
+          );
+        }, delay);
+      };
+      const onPress = (button: ZwiftButton) => {
+        const at = performance.now();
+        const last = emitted.current.get(button);
+        const relayed = last !== undefined && last.id !== id && at - last.at < RELAY_MS;
+        if (!relayed) {
+          emitted.current.set(button, { id, at });
+          const action = ZWIFT_ACTIONS[button];
+          if (action) emitControl(action);
+        }
+        // Shown on its line all the same: it tells which side reports what.
+        setControllers((all) =>
+          all.map((c) => (c.id === id ? { ...c, lastButton: button, presses: c.presses + 1 } : c)),
+        );
+      };
+      const open = async () => {
+        const controller = await connectZwiftController(device, onPress, () => {
+          if (link.controller === controller) link.controller = null;
+          update(id, { lost: true });
+          retryFrom(0);
+        });
+        link.controller?.disconnect();
+        link.controller = controller;
+        setControllers((all) =>
+          all.some((c) => c.id === id)
+            ? all.map((c) => (c.id === id ? { ...c, name: controller.name, lost: false } : c))
+            : [...all, { id, name: controller.name, lost: false, lastButton: null, presses: 0 }],
+        );
+        setError(null);
+      };
+      try {
+        await open();
+      } catch (e) {
+        // A new pick that fails is not kept; a known one stays, lost.
+        if (!known) links.current.delete(id);
+        throw e;
+      }
+    },
+    [update],
+  );
+
+  const run = useCallback(async (connectAll: () => Promise<void>) => {
     setConnecting(true);
     setError(null);
     try {
-      const device = await requestZwiftController();
-      const controller = await connectZwiftController(
-        device,
-        (button) => {
-          const action = ZWIFT_ACTIONS[button];
-          if (action) emitControl(action);
-        },
-        () => {
-          setLost(true);
-        },
-      );
-      current.current?.disconnect();
-      current.current = controller;
-      setName(controller.name);
-      setLost(false);
+      await connectAll();
     } catch (e) {
       const cancelled = e instanceof DOMException && e.name === "NotFoundError";
-      setError(cancelled ? null : e instanceof Error ? e.message : String(e));
+      setError(cancelled ? null : messageOf(e));
     } finally {
       setConnecting(false);
     }
   }, []);
 
+  const connect = useCallback(
+    () => run(async () => attach(await requestZwiftController())),
+    [run, attach],
+  );
+
+  const reconnect = useCallback(() => {
+    const lost = [...links.current.values()].filter((l) => l.controller === null);
+    if (links.current.size === 0) return connect();
+    return run(async () => {
+      const results = await Promise.allSettled(lost.map((l) => attach(l.device)));
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) throw failed.reason;
+    });
+  }, [run, attach, connect]);
+
   const disconnect = useCallback(() => {
-    current.current?.disconnect();
-    current.current = null;
-    setName(null);
-    setLost(false);
+    for (const link of links.current.values()) {
+      stopRetrying(link);
+      link.controller?.disconnect();
+    }
+    links.current.clear();
+    setControllers([]);
   }, []);
 
   useEffect(
     () => () => {
-      current.current?.disconnect();
+      for (const link of links.current.values()) {
+        stopRetrying(link);
+        link.controller?.disconnect();
+      }
+      links.current.clear();
     },
     [],
   );
@@ -87,10 +213,12 @@ export function useZwiftController(): ZwiftControllerState {
   return {
     supported: isZwiftControllerSupported(),
     connecting,
-    name,
-    lost,
+    controllers,
+    name: controllers[0]?.name ?? null,
+    lost: controllers.some((c) => c.lost),
     error,
     connect,
+    reconnect,
     disconnect,
   };
 }

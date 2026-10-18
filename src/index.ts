@@ -35,7 +35,14 @@ export {
 export type { ControlAction } from "./controls";
 export { emitControl, useControls } from "./controls";
 export { pressed, useGamepadControls } from "./gamepad";
-export type { ZwiftButton } from "./zwiftClick";
-export { decodeButtons, isZwiftControllerSupported } from "./zwiftClick";
-export type { ZwiftControllerState } from "./useZwiftController";
+export type { ControllerOptions, OnZwiftMessage, ZwiftButton, ZwiftController } from "./zwiftClick";
+export {
+  RIDE_ON,
+  ZWIFT_DEVICE_TYPES,
+  connectZwiftController,
+  decodeButtons,
+  isZwiftControllerSupported,
+  requestZwiftController,
+} from "./zwiftClick";
+export type { ZwiftControllerInfo, ZwiftControllerState } from "./useZwiftController";
 export { ZWIFT_ACTIONS, useZwiftController } from "./useZwiftController";
