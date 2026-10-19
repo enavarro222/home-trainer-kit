@@ -45,4 +45,10 @@ export {
   requestZwiftController,
 } from "./zwiftClick";
 export type { ZwiftControllerInfo, ZwiftControllerState } from "./useZwiftController";
-export { ZWIFT_ACTIONS, useZwiftController } from "./useZwiftController";
+export {
+  RETRY_MS,
+  ZWIFT_ACTIONS,
+  ZWIFT_PRIMARY_TYPES,
+  ZWIFT_SECONDARY_TYPES,
+  useZwiftController,
+} from "./useZwiftController";

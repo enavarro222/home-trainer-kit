@@ -24,13 +24,13 @@ company id (`0x094A`); its first byte is the model and side. A
 | 0x08 | Zwift Ride, left  | no                |
 | 0x09 | Zwift Click (v1)  | no                |
 | 0x0A | Click v2, right   | **yes**: lists it |
-| 0x0B | Click v2, left    | not yet           |
+| 0x0B | Click v2, left    | **yes**: lists it |
 
 Values from BikeControl's `constants.dart` (which marks the Click v2 ones
 as unconfirmed).
 
-**Buttons of the right pod** (measured): +, A, B, Y, Z. The −, the arrows
-and the rest are on the left pod. Messages are type `0x23`, a 32-bit field
+**Buttons** (measured): the right pod has +, A, B, Y, Z; the left pod has
+−, ←, →, ↑, ↓. Messages are type `0x23`, a 32-bit field
 where a button pressed is a 0 bit; `decodeButtons` reads them right:
 
 ```
@@ -49,9 +49,41 @@ A press comes as two identical messages ~0.1 s apart, then about ten
 - **The right pod alone does not relay the left pod's buttons.** With only
   the right connected, the left pod's LED keeps blinking (it is looking for
   a link) and its presses never arrive.
-- **Both connected: a + counted twice** (seen in the game, before
-  presses were deduplicated). One pod seems to relay the other's presses
-  once both are linked; not yet measured with the diagnostic.
+- **The left pod gives nothing on its own**, nor once the right one is
+  connected, on a later day: only its status messages and battery (and,
+  after a reconnection, not even those). The same pod, on an earlier test,
+  relayed everything (below). Zwift's "unlock" expiring (BikeControl: it
+  lasts ~24 h) would explain it, but see the last point. Hints: when it worked, the left pod sent
+  the challenge `ff 03 00 0a 21 …`; when it didn't, never. And its status
+  `2a 08 03 12 12 12 10 08 … 10 00 18 2a …` read `… 10 08 18 …` when it
+  worked, `… 10 08 24 …` when it didn't. Not the order of connection:
+  both pods off and on, the right one connected first, the left one still
+  gives no button (it offers the unlock challenge, below). Zwift's app had
+  not seen the pods in the days before the test that worked: why it
+  worked that once is unknown. **Count on the right pod only.**
+- **The left pod relays the right one** (when it works at all, see
+  above). With both connected, every press
+  on the right pod (+, A, B, Y, Z) also comes through the left one, ~30 ms
+  later; the left one also sends its own buttons. `useZwiftController`
+  counts them once (same button from another controller within
+  `RELAY_MS`, 250 ms). The left pod also sends, on the buttons
+  characteristic:
+  - `19 10 5a` every ~5 s: battery level (type `0x19`, BikeControl's
+    `BATTERY_LEVEL_TYPE`; `0x5a` = 90 %);
+  - `ff 05 00 fa 05 …`, every 3 s: a status. It holds, as text, what reads
+    as a Bluetooth address (`C04A0EF99948`, maybe the other pod's), and
+    ends with `… 30 bb 16 38 a7 16`: varints 2875 and 2855, which look like
+    coin cell voltages in mV (one per pod?). Guesswork;
+  - `2a 08 03 12 12 12 10 08 … 22 05 xx xx xx xx 1f 28 fb 01`, every 3 s:
+    another status. Its 5 bytes after `22 05` are shaped like the button
+    field (32 bits, a 0 bit per button down) and change between logs
+    (`7d fb fe 87 1f`, `fc ff fe 87 1f`, `ff ff ff f7 1f`…). Unknown;
+  - `ff 03 00 0a 21 03 …` then more, now and then: most likely the start
+    of Zwift's encrypted "unlock". `0a 21` is a 33-byte field starting
+    with `03`: the shape of a compressed elliptic-curve public key. Then
+    `10 80 80 8c 10` and `1a 3b` (a 59-byte field): encrypted data. The
+    left pod offers a key exchange and waits for an answer, which we
+    don't give: likely why its buttons stay silent.
 - **It sleeps after about a minute**, LED off, and the link drops
   (`gattserverdisconnected`). "RideOn" written every 3 s, and answered,
   does not keep it awake, nor does BikeControl's start command (`RideOn`
@@ -100,11 +132,13 @@ A press comes as two identical messages ~0.1 s apart, then about ten
 - [x] `RideOn` + `02 03`: no change to the sleep (left pod: not tested).
 - [x] Waking with "Retry on its own" (every 2 s): it reconnects alone,
       about 6 s after the waking press (Chrome on Linux).
-- [ ] The left pod alone: buttons, and does it stop after a minute?
-- [ ] Both pods: which one relays the other?
-- [ ] The same on Chrome for Android (the games' tablet): sleep, and
-      reconnecting without the picker (Android may connect to a known
-      address without scanning).
+- [x] The left pod alone, the right one on but not connected to us:
+      nothing. With the right one connected too: nothing either, that day.
+- [ ] Both pods for 3–4 min with presses: does the left one go silent
+      after a minute without the unlock (as BikeControl reports)?
+- [x] Both pods: the left one relays the right one.
+- [x] The same on Chrome for Android (a phone): it behaves the same, by a
+      first look (no log kept).
 
 ## Sources
 

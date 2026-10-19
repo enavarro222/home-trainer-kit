@@ -27,11 +27,14 @@ de build : Vite et Vitest des jeux les lisent directement.
   Bluetooth). Click v2 : Zwift le verrouille sur son appli, ce qui répond sans « déverrouillage » reste à
   vérifier.
   Click v2 et Play : deux boîtiers BLE (gauche, droite) ; `useZwiftController` en garde plusieurs
-  (`controllers`, chacun avec son dernier bouton pressé), `connect()` en ajoute un.
+  (`controllers`, chacun avec son dernier bouton pressé), `connect(types?)` en ajoute un, la
+  liste du navigateur filtrée sur des types (`ZWIFT_PRIMARY_TYPES` : boîtiers droits et Click,
+  qui marchent seuls ; `ZWIFT_SECONDARY_TYPES` : gauches, qui exigent le déblocage Zwift).
   Mesures sur une vraie Click v2 (veille après 60 s, boîtier droit seul, reconnexion) :
   `docs/zwift-click-v2.md`, à tenir à jour ; carte « Diagnostic » de l'appli de test pour mesurer.
-  Liaison perdue : il retente seul chaque boîtier (1 s, 3 s, 10 s, `RETRY_DELAYS_MS`), puis
-  `reconnect()` reprend ceux qui sont perdus sans la liste du navigateur.
+  Liaison perdue (veille après une minute sans appui, le plus souvent) : il retente seul chaque
+  boîtier toutes les 2 s (`RETRY_MS`) tant qu'il est choisi, en écoutant ses annonces si Chrome
+  le permet ; une tentative à la fois, que `reconnect()` rejoint.
 
 ## Application de test
 

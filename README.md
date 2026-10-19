@@ -38,14 +38,20 @@ and the button.
 TypeScript sources, no build step: Vite and Vitest read them as they are.
 
 ```sh
-pnpm add github:enavarro222/home-trainer-kit#v0.1.1
+pnpm add github:enavarro222/home-trainer-kit#v0.1.2
 ```
 
 ```tsx
-import { useControls, useGamepadControls, useSensor, useZwiftController } from "home-trainer-kit";
+import {
+  ZWIFT_PRIMARY_TYPES,
+  useControls,
+  useGamepadControls,
+  useSensor,
+  useZwiftController,
+} from "home-trainer-kit";
 
 const trainer = useSensor({ rolling: 0.004, airDrag: 0.19 }); // the game's road model
-const remote = useZwiftController(); // remote.connect() from a click; remote.reconnect() once lost
+const remote = useZwiftController(); // remote.connect(ZWIFT_PRIMARY_TYPES) from a click
 useGamepadControls(); // once, app-wide
 useControls({ left: turnLeft, right: turnRight, select: togglePause });
 ```

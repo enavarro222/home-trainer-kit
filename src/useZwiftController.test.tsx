@@ -1,11 +1,12 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useControls } from "./controls";
-import { RELAY_MS, RETRY_DELAYS_MS, useZwiftController } from "./useZwiftController";
+import { RELAY_MS, RETRY_MS, useZwiftController } from "./useZwiftController";
 import type { ZwiftButton } from "./zwiftClick";
 import { connectZwiftController, requestZwiftController } from "./zwiftClick";
 
-vi.mock("./zwiftClick", () => ({
+vi.mock("./zwiftClick", async (original) => ({
+  ZWIFT_DEVICE_TYPES: (await original<typeof import("./zwiftClick")>()).ZWIFT_DEVICE_TYPES,
   isZwiftControllerSupported: () => true,
   requestZwiftController: vi.fn(),
   connectZwiftController: vi.fn(),
@@ -36,13 +37,8 @@ const drop = (id: string) => {
   });
 };
 
-/** Lets the timer of retry `attempt` fire, and its connection settle. */
-const wait = (attempt: number) =>
-  act(() => vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[attempt] ?? 0));
-
-const giveUp = async () => {
-  for (const [attempt] of RETRY_DELAYS_MS.entries()) await wait(attempt);
-};
+/** Lets `n` retries fire, and their connections settle. */
+const retries = (n = 1) => act(() => vi.advanceTimersByTimeAsync(RETRY_MS * n));
 
 describe("useZwiftController", () => {
   beforeEach(() => {
@@ -129,21 +125,46 @@ describe("useZwiftController", () => {
     await act(() => result.current.connect());
     drop("left");
     expect(result.current.lost).toBe(true);
-    await wait(0);
+    await retries();
     expect(result.current.lost).toBe(false);
     expect(open).toHaveBeenCalledTimes(2);
     expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("tries each delay, then gives up until asked", async () => {
+  it("keeps trying while it sleeps, and comes back once woken", async () => {
     const { result } = renderHook(() => useZwiftController());
     await act(() => result.current.connect());
     down.add("left");
     drop("left");
-    await giveUp();
-    await act(() => vi.advanceTimersByTimeAsync(60_000));
-    expect(open).toHaveBeenCalledTimes(1 + RETRY_DELAYS_MS.length);
+    await retries(30);
     expect(result.current.lost).toBe(true);
+    expect(open).toHaveBeenCalledTimes(31);
+    down.clear();
+    await retries();
+    expect(result.current.lost).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares an attempt under way with a manual reconnection", async () => {
+    const { result } = renderHook(() => useZwiftController());
+    await act(() => result.current.connect());
+    let wake: () => void = () => undefined;
+    open.mockImplementationOnce(
+      (device, onPress, onLost) =>
+        new Promise((resolve) => {
+          wake = () => {
+            links.set(device.id, { drop: onLost, press: onPress });
+            resolve({ name: "Zwift Click", disconnect: vi.fn() });
+          };
+        }),
+    );
+    drop("left");
+    await retries();
+    const manual = act(() => result.current.reconnect());
+    wake();
+    await manual;
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(result.current.lost).toBe(false);
   });
 
   it("reconnects only the lost side, without the browser list", async () => {
@@ -153,7 +174,6 @@ describe("useZwiftController", () => {
     await act(() => result.current.connect());
     down.add("left");
     drop("left");
-    await giveUp();
     expect(result.current.controllers.map((c) => c.lost)).toEqual([true, false]);
     down.clear();
     open.mockClear();
@@ -162,6 +182,12 @@ describe("useZwiftController", () => {
     expect(request).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenLastCalledWith(left, expect.any(Function), expect.any(Function));
+  });
+
+  it("lists only the device types asked for", async () => {
+    const { result } = renderHook(() => useZwiftController());
+    await act(() => result.current.connect([0x0a]));
+    expect(request).toHaveBeenCalledWith([0x0a]);
   });
 
   it("opens the browser list when no controller was picked yet", async () => {

@@ -3,6 +3,7 @@ import type { ControlAction } from "./controls";
 import { emitControl } from "./controls";
 import type { ZwiftButton, ZwiftController } from "./zwiftClick";
 import {
+  ZWIFT_DEVICE_TYPES,
   connectZwiftController,
   isZwiftControllerSupported,
   requestZwiftController,
@@ -23,11 +24,31 @@ export const ZWIFT_ACTIONS: Readonly<Partial<Record<ZwiftButton, ControlAction>>
 };
 
 /**
- * After a lost link, the controller is tried again on its own after each of
- * these delays (ms), then left to `reconnect`. Covers a controller that went
- * out of range or to sleep for a moment.
+ * After a lost link, the controller is tried again on its own every RETRY_MS,
+ * for as long as it stays picked. A Click v2 sleeps after a minute without a
+ * press and drops the link: the next press wakes it, and the next attempt
+ * brings it back (docs/zwift-click-v2.md).
  */
-export const RETRY_DELAYS_MS: readonly number[] = [1000, 3000, 10000];
+export const RETRY_MS = 2000;
+
+/**
+ * The controllers that work on their own: the right side of a pair (the
+ * left one of a Click v2 answers only when unlocked) and the single Click.
+ * For `connect`, to list only them in the browser picker.
+ */
+export const ZWIFT_PRIMARY_TYPES: readonly number[] = [
+  ZWIFT_DEVICE_TYPES.click,
+  ZWIFT_DEVICE_TYPES.clickV2Right,
+  ZWIFT_DEVICE_TYPES.playRight,
+  ZWIFT_DEVICE_TYPES.rideRight,
+];
+
+/** The other side of a pair, which may add buttons (the − of a Click v2). */
+export const ZWIFT_SECONDARY_TYPES: readonly number[] = [
+  ZWIFT_DEVICE_TYPES.clickV2Left,
+  ZWIFT_DEVICE_TYPES.playLeft,
+  ZWIFT_DEVICE_TYPES.rideLeft,
+];
 
 /**
  * The same button from another controller this soon after (ms) is the same
@@ -40,7 +61,7 @@ export interface ZwiftControllerInfo {
   /** The browser's id for the device. */
   id: string;
   name: string;
-  /** The link dropped and the automatic retries gave up, or are still trying. */
+  /** The link dropped (asleep, off, out of reach): tried again every RETRY_MS. */
   lost: boolean;
   /** Its last button pressed, to check it works; null before any. */
   lastButton: ZwiftButton | null;
@@ -60,9 +81,10 @@ export interface ZwiftControllerState {
   error: string | null;
   /**
    * Picks a controller in the browser list (needs a user gesture) and adds
-   * it to the others: both sides of a Click v2 are picked one after the other.
+   * it to the others: both sides of a pair are picked one after the other.
+   * With `deviceTypes` (see ZWIFT_DEVICE_TYPES), only those are listed.
    */
-  connect: () => Promise<void>;
+  connect: (deviceTypes?: readonly number[]) => Promise<void>;
   /** Every lost controller, again, without the browser list; with none picked, `connect`. */
   reconnect: () => Promise<void>;
   /** Disconnects them all. */
@@ -75,6 +97,24 @@ interface Link {
   device: BluetoothDevice;
   controller: ZwiftController | null;
   retry: ReturnType<typeof setTimeout> | null;
+  /** The attempt under way: a manual reconnection joins it rather than racing it. */
+  opening: Promise<void> | null;
+  /** Stops watching the device's advertisements, if watching. */
+  unwatch: (() => void) | null;
+}
+
+/**
+ * While lost, watches the device's advertisements where Chrome allows it
+ * (behind a flag for now): it makes Chrome scan, which lets a reconnection
+ * find a woken controller (measured on Linux).
+ */
+function watch(device: BluetoothDevice): (() => void) | null {
+  if (!("watchAdvertisements" in device)) return null;
+  const abort = new AbortController();
+  device.watchAdvertisements({ signal: abort.signal }).catch(() => undefined);
+  return () => {
+    abort.abort();
+  };
 }
 
 /** Zwift Click / Ride / Play controllers, their presses emitted as handlebar actions (see controls). */
@@ -93,9 +133,11 @@ export function useZwiftController(): ZwiftControllerState {
   const stopRetrying = (link: Link) => {
     if (link.retry !== null) clearTimeout(link.retry);
     link.retry = null;
+    link.unwatch?.();
+    link.unwatch = null;
   };
 
-  /** Connects to `device`; on a lost link, retries it after each delay of `RETRY_DELAYS_MS`. */
+  /** Connects to `device`; on a lost link, retries it every RETRY_MS until back or dropped. */
   const attach = useCallback(
     async (device: BluetoothDevice) => {
       const id = device.id;
@@ -103,24 +145,27 @@ export function useZwiftController(): ZwiftControllerState {
       // Picked again while connected: it already works, a new link would
       // only cut this one.
       if (known?.controller) return;
-      const link: Link = known ?? { device, controller: null, retry: null };
-      stopRetrying(link);
+      if (known?.opening) return known.opening;
+      const link: Link = known ?? {
+        device,
+        controller: null,
+        retry: null,
+        opening: null,
+        unwatch: null,
+      };
+      if (link.retry !== null) clearTimeout(link.retry);
+      link.retry = null;
       links.current.set(id, link);
       const current = () => links.current.get(id) === link;
 
-      const retryFrom = (attempt: number) => {
-        const delay = RETRY_DELAYS_MS[attempt];
-        if (delay === undefined || !current()) return;
+      const retryLater = () => {
+        if (!current() || link.retry !== null) return;
+        link.unwatch ??= watch(device);
         link.retry = setTimeout(() => {
           link.retry = null;
-          if (!current()) return;
-          open().then(
-            () => undefined,
-            () => {
-              retryFrom(attempt + 1);
-            },
-          );
-        }, delay);
+          if (!current() || link.controller || link.opening) return;
+          once().catch(retryLater);
+        }, RETRY_MS);
       };
       const onPress = (button: ZwiftButton) => {
         const at = performance.now();
@@ -140,9 +185,14 @@ export function useZwiftController(): ZwiftControllerState {
         const controller = await connectZwiftController(device, onPress, () => {
           if (link.controller === controller) link.controller = null;
           update(id, { lost: true });
-          retryFrom(0);
+          retryLater();
         });
-        link.controller?.disconnect();
+        if (!current()) {
+          // Dropped while connecting.
+          controller.disconnect();
+          return;
+        }
+        stopRetrying(link);
         link.controller = controller;
         setControllers((all) =>
           all.some((c) => c.id === id)
@@ -151,11 +201,20 @@ export function useZwiftController(): ZwiftControllerState {
         );
         setError(null);
       };
+      /** One attempt at a time, shared by whoever asks meanwhile. */
+      const once = () => {
+        link.opening ??= open().finally(() => {
+          link.opening = null;
+        });
+        return link.opening;
+      };
       try {
-        await open();
+        await once();
       } catch (e) {
-        // A new pick that fails is not kept; a known one stays, lost.
-        if (!known) links.current.delete(id);
+        // A new pick that fails is not kept; a known one stays, lost, and
+        // is tried again.
+        if (known) retryLater();
+        else links.current.delete(id);
         throw e;
       }
     },
@@ -176,7 +235,8 @@ export function useZwiftController(): ZwiftControllerState {
   }, []);
 
   const connect = useCallback(
-    () => run(async () => attach(await requestZwiftController())),
+    (deviceTypes?: readonly number[]) =>
+      run(async () => attach(await requestZwiftController(deviceTypes))),
     [run, attach],
   );
 

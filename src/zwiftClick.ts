@@ -128,24 +128,25 @@ export const isZwiftControllerSupported = (): boolean =>
 
 /**
  * Opens the browser device picker on Zwift controllers. Must run from a user
- * gesture. With `deviceType` (see ZWIFT_DEVICE_TYPES), only that model and
- * side are listed: the picker shows names only, the same for both sides.
+ * gesture. With `deviceTypes` (see ZWIFT_DEVICE_TYPES), only those models
+ * and sides are listed: the picker shows names only, the same for both sides.
  */
-export function requestZwiftController(deviceType?: number): Promise<BluetoothDevice> {
+export function requestZwiftController(
+  deviceTypes?: number | readonly number[],
+): Promise<BluetoothDevice> {
+  const types = typeof deviceTypes === "number" ? [deviceTypes] : deviceTypes;
   return navigator.bluetooth.requestDevice({
     filters:
-      deviceType === undefined
+      types === undefined || types.length === 0
         ? [
             { manufacturerData: [{ companyIdentifier: ZWIFT_MANUFACTURER }] },
             { namePrefix: "Zwift" },
           ]
-        : [
-            {
-              manufacturerData: [
-                { companyIdentifier: ZWIFT_MANUFACTURER, dataPrefix: new Uint8Array([deviceType]) },
-              ],
-            },
-          ],
+        : types.map((type) => ({
+            manufacturerData: [
+              { companyIdentifier: ZWIFT_MANUFACTURER, dataPrefix: new Uint8Array([type]) },
+            ],
+          })),
     optionalServices: [...ZWIFT_SERVICES],
   });
 }
